@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 
-# Security configuration
+# Configuración de Seguridad
 SECRET_KEY = "zJWzWMkHju0AmxmE60rdm077xXgyupEwd+E4K2KVjv0="
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440
@@ -18,22 +18,22 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash"""
+    """Verificar una contraseña contra su hash"""
     return pwd_context.verify(plain_password, hashed_password)
 
 def get_password_hash(password: str) -> str:
-    """Hash a password"""
+    """Hashear una contraseña"""
     return pwd_context.hash(password)
 
 def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
-    """Authenticate a user"""
+    """Autenticar un usuario con email y contraseña"""
     user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(password, user.hashed_password):
         return None
     return user
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    """Create JWT access token"""
+    """Crea un token de acceso JWT"""
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
@@ -45,11 +45,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 def verify_token_from_cookie(access_token: Optional[str] = Cookie(None)):
-    """Verify JWT token from cookie"""
+    """VeriIfica el token JWT desde una cookie"""
     if not access_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated"
+            detail="No Autenticado"
         )
     
     try:
@@ -58,33 +58,33 @@ def verify_token_from_cookie(access_token: Optional[str] = Cookie(None)):
         if email is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication credentials"
+                detail="Credenciales de Autenticación Inválidas"
             )
         return email
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials"
+            detail="Credenciales de Autenticación Inválidas"
         )
 
 def get_current_user(
     db: Session = Depends(get_db),
     email: str = Depends(verify_token_from_cookie)
 ) -> User:
-    """Get current user from JWT token"""
+    """Obtener el usuario actual a partir del token JWT"""
     user = db.query(User).filter(User.email == email).first()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found"
+            detail="Usuario no encontrado"
         )
     return user
 
 def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
-    """Get current active user"""
+    """Obtener el usuario activo actual"""
     if not current_user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Inactive user"
+            detail="Usuario inactivo"
         )
     return current_user

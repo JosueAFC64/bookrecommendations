@@ -65,7 +65,7 @@ class ReviewResponse(BaseModel):
     rating: float
     comment: Optional[str]
     created_at: datetime
-    user_name: str  # Nombre del usuario que escribió la reseña
+    user_name: str  
     
     class Config:
         from_attributes = True

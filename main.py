@@ -1,10 +1,13 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Response, Cookie
+from fastapi import FastAPI, Depends, HTTPException, status, Response, Cookie, UploadFile, File
 from fastapi.security import HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import uvicorn
+import os
+import shutil
+from pathlib import Path
 
 from database import get_db, init_db
 from auth import (
@@ -27,7 +30,7 @@ from crud import (
 
 app = FastAPI(title="Book Recommendation API", version="1.0.0")
 
-# Mount static files
+# Para archivos estáticos
 app.mount("/images", StaticFiles(directory="images"), name="images")
 
 # CORS middleware
@@ -40,16 +43,16 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# Initialize database
+# Inicializar base de datos
 init_db()
 
-# Initialize recommendation engine
+# Inicializar motor de recomendaciones
 recommendation_engine = RecommendationEngine()
 
 @app.post("/auth/register", response_model=UserResponse)
 async def register(user: UserCreate, db: Session = Depends(get_db)):
     """Registro de nuevos usuarios"""
-    # Check if user already exists
+    # Verificar si el email ya está registrado
     db_user = get_user_by_email(db, email=user.email)
     if db_user:
         raise HTTPException(
@@ -57,7 +60,7 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
             detail="Email already registered"
         )
     
-    # Create new user
+    # Crear usuario
     hashed_password = get_password_hash(user.password)
     db_user = create_user(db, user, hashed_password)
     
@@ -81,14 +84,14 @@ async def login(user: UserLogin, response: Response, db: Session = Depends(get_d
     
     access_token = create_access_token(data={"sub": db_user.email})
     
-    # Set secure HTTP-only cookie
+    # Establecer la cookie con el token de acceso
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=False,  # Set to False for development
+        secure=False, 
         samesite="lax",
-        max_age=86400000,  # 1 day
+        max_age=86400000,  # 1 día en milisegundos
         path="/",
         domain=None
     )
@@ -109,6 +112,56 @@ async def logout(response: Response):
     """Cerrar sesión eliminando la cookie"""
     response.delete_cookie(key="access_token")
     return {"message": "Logout successful"}
+
+@app.post("/upload-image")
+async def upload_image(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Subir imagen de portada (solo administradores)"""
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    # Validar tipo de archivo
+    if not file.content_type.startswith('image/'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be an image"
+        )
+    
+    # Validar tamaño (máximo 5MB)
+    # file.size puede ser None en algunos casos, así que verificamos primero
+    if hasattr(file, 'size') and file.size and file.size > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File size must be less than 5MB"
+        )
+    
+    # Crear directorio de imágenes si no existe
+    images_dir = Path("images")
+    images_dir.mkdir(exist_ok=True)
+    
+    # Generar nombre único para el archivo
+    unique_filename = f"{file.filename}"
+    file_path = images_dir / unique_filename
+    
+    # Guardar archivo
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        print(f"Archivo guardado exitosamente: {file_path}")
+    except Exception as e:
+        print(f"Error guardando archivo: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error saving file: {str(e)}"
+        )
+    
+    print(f"Retornando filename: {unique_filename}")
+    return {"filename": unique_filename}
 
 @app.get("/auth/me", response_model=UserResponse)
 async def get_current_user_info(
@@ -136,7 +189,9 @@ async def create_new_book(
             detail="Not enough permissions"
         )
     
+    print(f"Creando libro con datos: {book.dict()}")
     db_book = create_book(db, book)
+    print(f"Libro creado exitosamente con ID: {db_book.id}")
     return BookResponse.from_orm(db_book)
 
 @app.get("/books", response_model=List[BookResponse])
@@ -174,7 +229,7 @@ async def create_book_review(
     current_user: User = Depends(get_current_active_user)
 ):
     """Crear reseña de un libro"""
-    # Check if book exists
+    # Verificar si el libro existe
     book = get_book_by_id(db, book_id)
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")

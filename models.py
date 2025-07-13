@@ -27,7 +27,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationships
+    # Relaciones
     reviews = relationship("Review", back_populates="user")
     reading_history = relationship("ReadingHistory", back_populates="user")
     preferences = relationship("UserPreference", back_populates="user")
@@ -48,7 +48,7 @@ class Book(Base):
     rating_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationships
+    # Relaciones
     reviews = relationship("Review", back_populates="book")
     reading_history = relationship("ReadingHistory", back_populates="book")
 
@@ -62,7 +62,7 @@ class Review(Base):
     comment = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationships
+    # Relaciones
     user = relationship("User", back_populates="reviews")
     book = relationship("Book", back_populates="reviews")
 
@@ -79,7 +79,7 @@ class ReadingHistory(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationships
+    # Relaciones
     user = relationship("User", back_populates="reading_history")
     book = relationship("Book", back_populates="reading_history")
 
@@ -93,5 +93,5 @@ class UserPreference(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationships
+    # Relaciones
     user = relationship("User", back_populates="preferences")

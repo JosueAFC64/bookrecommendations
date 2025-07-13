@@ -56,6 +56,19 @@ export const authAPI = {
   me: () => api.get("/auth/me"),
 }
 
+// API de archivos
+export const filesAPI = {
+  uploadImage: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post("/upload-image", formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+}
+
 // API de libros
 export const booksAPI = {
   getAll: (params = {}) => api.get("/books", { params }),

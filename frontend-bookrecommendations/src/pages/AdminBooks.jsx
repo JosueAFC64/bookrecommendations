@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { booksAPI } from "../services/api";
+import { booksAPI, filesAPI } from "../services/api";
 import LoadingSpinner from "../components/LoadingSpinner";
 import BookCard from "../components/BookCard";
-import { Plus, Search, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Upload, X } from "lucide-react";
 import toast from "react-hot-toast";
 
 const AdminBooks = () => {
@@ -22,6 +22,10 @@ const AdminBooks = () => {
     isbn: "",
     cover_url: "",
   });
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [creatingBook, setCreatingBook] = useState(false);
 
   useEffect(() => {
     loadBooks();
@@ -46,17 +50,96 @@ const AdminBooks = () => {
     }));
   };
 
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validar tipo de archivo
+      if (!file.type.startsWith('image/')) {
+        toast.error("Por favor selecciona un archivo de imagen válido");
+        return;
+      }
+      
+      // Validar tamaño (máximo 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("La imagen debe ser menor a 5MB");
+        return;
+      }
+      
+      setSelectedImage(file);
+      
+      // Crear preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleImageUpload = async () => {
+    if (!selectedImage) return;
+    
+    setUploadingImage(true);
+    try {
+      const response = await filesAPI.uploadImage(selectedImage);
+      const filename = response.data.filename;
+      setFormData(prev => ({
+        ...prev,
+        cover_url: filename
+      }));
+      toast.success("Imagen subida exitosamente");
+    } catch (error) {
+      toast.error("Error al subir la imagen");
+      console.error(error);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const clearImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    setFormData(prev => ({
+      ...prev,
+      cover_url: ""
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setCreatingBook(true);
 
     try {
+      let finalCoverUrl = formData.cover_url;
+
+      // Si hay una imagen seleccionada pero no se ha subido, subirla primero
+      if (selectedImage && !formData.cover_url) {
+        try {
+          setUploadingImage(true);
+          const response = await filesAPI.uploadImage(selectedImage);
+          finalCoverUrl = response.data.filename;
+          toast.success("Imagen subida exitosamente");
+        } catch (uploadError) {
+          toast.error("Error al subir la imagen");
+          console.error(uploadError);
+          setCreatingBook(false);
+          setUploadingImage(false);
+          return; // No continuar si falla la subida de imagen
+        } finally {
+          setUploadingImage(false);
+        }
+      }
+
       const bookData = {
         ...formData,
+        cover_url: finalCoverUrl,
         publication_year: formData.publication_year
           ? Number.parseInt(formData.publication_year)
           : null,
         pages: formData.pages ? Number.parseInt(formData.pages) : null,
       };
+
+      console.log("Datos del libro a crear:", bookData); // Para debugging
 
       await booksAPI.create(bookData);
       toast.success("Libro creado exitosamente");
@@ -71,9 +154,14 @@ const AdminBooks = () => {
         isbn: "",
         cover_url: "",
       });
+      setSelectedImage(null);
+      setImagePreview(null);
       loadBooks();
     } catch (error) {
+      console.error("Error al crear el libro:", error);
       toast.error("Error al crear el libro");
+    } finally {
+      setCreatingBook(false);
     }
   };
 
@@ -231,14 +319,64 @@ const AdminBooks = () => {
                 <label className="block text-sm font-semibold text-slate-700">
                   Portada
                 </label>
-                <input
-                  type="text"
-                  name="cover_url"
-                  value={formData.cover_url}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 focus:bg-white outline-none transition-all duration-200"
-                  placeholder="portada.jpg"
-                />
+                
+                {imagePreview && (
+                  <div className="relative mb-4">
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="w-32 h-40 object-cover rounded-lg border border-slate-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={clearImage}
+                      className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Input de archivo */}
+                <div className="space-y-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                    id="image-upload"
+                  />
+                  <label
+                    htmlFor="image-upload"
+                    className="flex items-center justify-center w-full px-4 py-3 bg-slate-50 border-2 border-dashed border-slate-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 cursor-pointer"
+                  >
+                    <Upload className="h-5 w-5 text-slate-400 mr-2" />
+                    <span className="text-slate-600">
+                      {selectedImage ? selectedImage.name : "Seleccionar imagen"}
+                    </span>
+                  </label>
+                  
+                  {/* Mostrar nombre del archivo seleccionado */}
+                  {selectedImage && (
+                    <div className="px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-blue-700">
+                        📁 Imagen seleccionada: {selectedImage.name}
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        La imagen se subirá automáticamente al crear el libro
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Mostrar nombre del archivo subido */}
+                  {formData.cover_url && (
+                    <div className="px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+                      <p className="text-sm text-green-700">
+                        ✓ Imagen subida: {formData.cover_url}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -265,9 +403,17 @@ const AdminBooks = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                  disabled={creatingBook}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-blue-400 disabled:to-blue-500 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 disabled:transform-none flex items-center space-x-2"
                 >
-                  Crear Libro
+                  {creatingBook ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>{uploadingImage ? "Subiendo imagen..." : "Creando libro..."}</span>
+                    </>
+                  ) : (
+                    <span>Crear Libro</span>
+                  )}
                 </button>
               </div>
             </form>

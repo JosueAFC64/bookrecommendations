@@ -64,10 +64,10 @@ def create_review(db: Session, review: ReviewCreate, book_id: int, user_id: int)
         comment=review.comment
     )
     db.add(db_review)
-    db.commit()  # Primero hacemos commit para guardar la reseña
+    db.commit()  
     db.refresh(db_review)
     
-    # Update book average rating
+    # Actualizar el libro con la nueva calificación
     book = db.query(Book).filter(Book.id == book_id).first()
     if book:
         avg_rating = db.query(func.avg(Review.rating)).filter(Review.book_id == book_id).scalar()
@@ -76,7 +76,7 @@ def create_review(db: Session, review: ReviewCreate, book_id: int, user_id: int)
         book.average_rating = round(float(avg_rating), 2) if avg_rating else 0.0
         book.rating_count = rating_count or 0
         
-        db.commit()  # Segundo commit para actualizar el libro
+        db.commit() 
     
     return db_review
 
@@ -100,7 +100,7 @@ def create_reading_history(db: Session, history: ReadingHistoryCreate, user_id: 
     db.commit()
     db.refresh(db_history)
     
-    # Update user preferences based on reading history
+    # Actualizar preferencias del usuario basadas en el historial de lectura
     update_user_preferences_from_history(db, user_id, history.book_id)
     
     return db_history
@@ -137,21 +137,21 @@ def update_user_preferences_from_history(db: Session, user_id: int, book_id: int
     if not book:
         return
     
-    # Get user's review for this book
+    # Obtener la reseña del usuario para el libro
     review = db.query(Review).filter(
         and_(Review.user_id == user_id, Review.book_id == book_id)
     ).first()
     
     if review:
-        # Update preference based on rating (normalize to -1 to 1 scale)
-        preference_score = (review.rating - 3) / 2  # 1-5 scale to -1 to 1
+        # Actualizar o crear la preferencia del usuario basada en la reseña
+        preference_score = (review.rating - 3) / 2  # en escala de 1 a 5, normalizado entre -1 y 1
         
         existing_pref = db.query(UserPreference).filter(
             and_(UserPreference.user_id == user_id, UserPreference.genre == book.genre)
         ).first()
         
         if existing_pref:
-            # Average with existing preference
+            # Promedio de la puntuación de preferencia si ya existe
             existing_pref.preference_score = (existing_pref.preference_score + preference_score) / 2
             existing_pref.updated_at = datetime.utcnow()
         else:

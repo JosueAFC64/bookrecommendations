@@ -33,6 +33,7 @@ const Profile = () => {
     "Literatura Experimental",
     "Misterio",
     "No Ficción",
+    "Novela",
     "Novela Histórica",
     "Realismo Mágico",
     "Romance",

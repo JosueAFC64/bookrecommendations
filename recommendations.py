@@ -12,13 +12,13 @@ class RecommendationEngine:
     
     def get_genre_recommendations(self, db: Session, user_id: int, limit: int = 10) -> List[RecommendationResponse]:
         """Recomendaciones basadas en géneros preferidos"""
-        # Get user preferences
+        # Obtener preferencias del usuario
         preferences = db.query(UserPreference).filter(
             UserPreference.user_id == user_id
         ).all()
         
         if not preferences:
-            # If no explicit preferences, infer from reading history
+            # Si no hay preferencias, inferirlas de la historia de lectura
             self._infer_preferences_from_history(db, user_id)
             preferences = db.query(UserPreference).filter(
                 UserPreference.user_id == user_id
@@ -26,19 +26,19 @@ class RecommendationEngine:
         
         recommendations = []
         
-        # Get books user hasn't read
+        # Obtener libros que el usuario no ha leído
         read_books_query = db.query(ReadingHistory.book_id).filter(
             ReadingHistory.user_id == user_id
         ).all()
         read_books_ids = [book_id for (book_id,) in read_books_query]
         
         for pref in preferences:
-            if pref.preference_score > 0:  # Only positive preferences
+            if pref.preference_score > 0:  # Solo considerar géneros con preferencia positiva
                 books = db.query(Book).filter(
                     and_(
                         Book.genre == pref.genre,
                         ~Book.id.in_(read_books_ids),
-                        Book.average_rating >= 3.5  # Only well-rated books
+                        Book.average_rating >= 3.5  # Solo libros bien valorados
                     )
                 ).order_by(desc(Book.average_rating)).limit(5).all()
                 
@@ -50,13 +50,13 @@ class RecommendationEngine:
                         reason=f"Recomendado por tu interés en {pref.genre}"
                     ))
         
-        # Sort by score and return top recommendations
+        # Ordenar recomendaciones por puntuación
         recommendations.sort(key=lambda x: x.score, reverse=True)
         return recommendations[:limit]
     
     def get_author_recommendations(self, db: Session, user_id: int, limit: int = 10) -> List[RecommendationResponse]:
         """Recomendaciones basadas en autores favoritos"""
-        # Find favorite authors based on high ratings
+        # Encontrar autores favoritos del usuario
         favorite_authors = db.query(
             Book.author,
             func.avg(Review.rating).label('avg_rating'),
@@ -72,7 +72,7 @@ class RecommendationEngine:
         
         recommendations = []
         
-        # Get books user hasn't read
+        # Obtener libros de estos autores que el usuario no ha leído
         read_books_query = db.query(ReadingHistory.book_id).filter(
             ReadingHistory.user_id == user_id
         ).all()
@@ -81,7 +81,7 @@ class RecommendationEngine:
         for author_data in favorite_authors:
             author, avg_rating, review_count = author_data
             
-            # Get other books by this author
+            # Obtener otros libros del autor
             books = db.query(Book).filter(
                 and_(
                     Book.author == author,
@@ -103,35 +103,35 @@ class RecommendationEngine:
     
     def get_collaborative_recommendations(self, db: Session, user_id: int, limit: int = 10) -> List[RecommendationResponse]:
         """Recomendaciones colaborativas usando correlación de Pearson"""
-        # Get user's ratings
+        # Obtener calificaciones del usuario
         user_ratings = self._get_user_ratings(db, user_id)
         if not user_ratings:
             return []
         
-        # Find similar users
+        # Encontrar usuarios similares
         similar_users = self._find_similar_users(db, user_id, user_ratings)
         
         recommendations = []
         
-        # Get books user hasn't read
+        # Obtener libros que el usuario no ha leído
         read_books_query = db.query(ReadingHistory.book_id).filter(
             ReadingHistory.user_id == user_id
         ).all()
         read_books = set(book_id for (book_id,) in read_books_query)
         
-        # Get recommendations from similar users
+        # Obtener recomendaciones de usuarios similares
         book_scores = defaultdict(list)
         
-        for similar_user_id, similarity in similar_users[:10]:  # Top 10 similar users
+        for similar_user_id, similarity in similar_users[:10]:  # Top 10 de usuarios similares
             similar_user_ratings = self._get_user_ratings(db, similar_user_id)
             
             for book_id, rating in similar_user_ratings.items():
                 if book_id not in read_books and book_id not in user_ratings:
                     book_scores[book_id].append(rating * similarity)
         
-        # Calculate average scores
+        # Calcular puntuaciones promedio 
         for book_id, scores in book_scores.items():
-            if len(scores) >= 2:  # At least 2 similar users rated it
+            if len(scores) >= 2:  # Al menos 2 puntuaciones para considerar
                 avg_score = sum(scores) / len(scores)
                 book = db.query(Book).filter(Book.id == book_id).first()
                 if book:
@@ -146,7 +146,7 @@ class RecommendationEngine:
     
     def get_popular_recommendations(self, db: Session, limit: int = 10) -> List[RecommendationResponse]:
         """Recomendaciones de libros populares"""
-        # Get books with high ratings and many reviews
+        # Obtener libros con alta calificación y número de reseñas
         popular_books = db.query(Book).filter(
             and_(
                 Book.average_rating >= 4.0,
@@ -177,7 +177,7 @@ class RecommendationEngine:
     
     def _find_similar_users(self, db: Session, user_id: int, user_ratings: Dict[int, float]) -> List[Tuple[int, float]]:
         """Find users with similar tastes using Pearson correlation"""
-        # Get all other users who have rated books
+        # Obtener usuarios que han calificado libros
         other_users = db.query(Review.user_id).filter(
             Review.user_id != user_id
         ).distinct().all()
@@ -185,19 +185,19 @@ class RecommendationEngine:
         similarities = []
         
         for other_user_tuple in other_users:
-            other_user_id = other_user_tuple[0]  # Extract user_id from tuple
+            other_user_id = other_user_tuple[0]  
             other_ratings = self._get_user_ratings(db, other_user_id)
             
             # Find common books
             common_books = set(user_ratings.keys()) & set(other_ratings.keys())
             
-            if len(common_books) >= 3:  # Need at least 3 common books
+            if len(common_books) >= 3:  # Al menos 3 libros en común
                 correlation = self._pearson_correlation(
                     [user_ratings[book_id] for book_id in common_books],
                     [other_ratings[book_id] for book_id in common_books]
                 )
                 
-                if correlation > 0.3:  # Only positive correlations
+                if correlation > 0.3:  # Solo considerar correlaciones positivas
                     similarities.append((other_user_id, correlation))
         
         similarities.sort(key=lambda x: x[1], reverse=True)
@@ -225,7 +225,7 @@ class RecommendationEngine:
     
     def _infer_preferences_from_history(self, db: Session, user_id: int):
         """Infer user preferences from reading history and ratings"""
-        # Get user's ratings grouped by genre
+        # Obtener ratings del usuario agrupados por género
         genre_ratings = db.query(
             Book.genre,
             func.avg(Review.rating).label('avg_rating'),
@@ -235,14 +235,13 @@ class RecommendationEngine:
         ).group_by(Book.genre).all()
         
         for genre, avg_rating, count in genre_ratings:
-            # Convert rating to preference score (-1 to 1)
+            # Convertir rating a una puntuación de preferencia
             preference_score = (float(avg_rating) - 3) / 2
             
-            # Weight by number of books read in genre
-            weight = min(float(count) / 5.0, 1.0)  # Max weight at 5 books
+            weight = min(float(count) / 5.0, 1.0)  
             final_score = preference_score * weight
             
-            # Create or update preference
+            # Crear o actualizar la preferencia 
             existing_pref = db.query(UserPreference).filter(
                 and_(UserPreference.user_id == user_id, UserPreference.genre == genre)
             ).first()
