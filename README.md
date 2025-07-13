@@ -11,3 +11,10 @@ Instalación:
    * Ejecuta el comando "npm install"
 3. Backend:
    * Instala las dependencias necesarias (no recuerdo sus nombres xd)
+
+Ejecución:
+
+1. Frontend:
+   * Ejecuta el comando "npm run dev"
+2. Backend:
+   * Ejecuta el comando "uvicorn main:app --reload"
