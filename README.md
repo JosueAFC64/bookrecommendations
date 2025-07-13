@@ -10,7 +10,7 @@ Instalación:
    * Ejecuta el comando "cd frontend-bookrecommendations"
    * Ejecuta el comando "npm install"
 3. Backend:
-   * Instala las dependencias necesarias (no recuerdo sus nombres xd)
+   * Ejecuta el comando "pip install -r requirements.txt"
 
 Ejecución:
 
