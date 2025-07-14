@@ -131,7 +131,7 @@ class RecommendationEngine:
         
         # Calcular puntuaciones promedio 
         for book_id, scores in book_scores.items():
-            if len(scores) >= 2:  # Al menos 2 puntuaciones para considerar
+            if len(scores) >= 1:  # Al menos 1 puntuacion para considerar
                 avg_score = sum(scores) / len(scores)
                 book = db.query(Book).filter(Book.id == book_id).first()
                 if book:
@@ -149,8 +149,8 @@ class RecommendationEngine:
         # Obtener libros con alta calificación y número de reseñas
         popular_books = db.query(Book).filter(
             and_(
-                Book.average_rating >= 4.0,
-                Book.rating_count >= 5
+                Book.average_rating >= 3.0,
+                Book.rating_count >= 1
             )
         ).order_by(
             desc(Book.average_rating),
